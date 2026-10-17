@@ -16,19 +16,20 @@
     body {
       font-family: Arial, sans-serif;
       margin: 0;
-      background: #0f1115;
-      color: #fff;
+      background: #22d434;
+      color: #222;
     }
 
     header {
-      padding: 16px;
+     padding: 16px;
       font-size: 20px;
       font-weight: bold;
-      background: #151924;
+      background: #145a1f;
+      color: white;
       position: sticky;
       top: 0;
     }
-
+    
     .container {
       padding: 16px;
     }
@@ -40,7 +41,7 @@
     }
 
     .card {
-      background: #1b2130;
+      background: #ffffff;
       padding: 12px;
       border-radius: 12px;
       cursor: pointer;
@@ -66,6 +67,15 @@
       border-radius: 8px;
       margin-top: 8px;
     }
+    
+    .drill-thumb {
+      height: 120px;
+      border-radius: 8px;
+      margin-top: 8px;
+      width: 100%;
+      object-fit: cover;
+      object-position: center top;
+    }
 
     #routeView {
       display: none;
@@ -81,7 +91,7 @@
       display: inline-block;
       padding: 10px 12px;
       margin-top: 10px;
-      background: #2d6cdf;
+      background: #145a1f;
       color: white;
       border-radius: 8px;
       text-decoration: none;
@@ -91,25 +101,114 @@
       margin-bottom: 10px;
       display: inline-block;
       cursor: pointer;
-      color: #aaa;
+      color: #145a1f;
     }
+
+    .category-grid {
+  display: grid;
+  gap: 16px;
+  max-width: 700px;
+  margin: 30px auto;
+}
+
+.category-btn {
+  background: #ffffff;
+  border: none;
+  color: #145a1f;
+  padding: 28px;
+  border-radius: 16px;
+  font-size: 1.3rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.category-btn:hover {
+  transform: scale(1.02);
+  background: #d9f7dc;
+}
+    
+/* Upcoming runs layout only */
+#scheduleGrid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+#scheduleGrid .card {
+  width: 100%;
+  max-width: 640px;
+}   
   </style>
 </head>
 <body>
-
-<header>🏃 RTH Winter Running Routes</header>
-
-<div class="container" id="homeView">
-  <div class="grid" id="routesGrid"></div>
+<header>🏃 RunTogether Heaton Park</header>
+  
+<div style="padding:12px 16px; display:flex; gap:10px; background:#1b7027; border-top:1px solid #b8e6bd;">
+  <button class="btn" onclick="showSection('routes')">Sessions</button>
+  <button class="btn" onclick="showSection('schedule')">Upcoming Runs</button>
 </div>
 
+<!-- ROUTES HOME -->
+<div class="container" id="homeView" style="display:none;">
+
+  <div id="routeCategories" class="category-grid">
+    
+    <button
+      class="category-btn"
+      onclick="openCategory('drill')"
+    >
+      🏃 Skills & Drills In The Park
+    </button>
+    
+    <button
+      class="category-btn"
+      onclick="openCategory('summer')"
+    >
+      ☀️ Daylight Routes Through The Clough
+    </button>
+
+    <button
+      class="category-btn"
+      onclick="openCategory('winter')"
+    >
+      ❄️ Winter Routes Around The Streets
+    </button>   
+
+  </div>
+
+  <div id="routesCatalogue" style="display:none;">
+    <div class="back" onclick="showRouteCategories()">
+      ← Back
+    </div>
+
+    <div class="grid" id="routesGrid"></div>
+  </div>
+
+</div>
+<!-- UPCOMING RUNS -->
+<div
+  class="container"
+  id="scheduleView"
+>
+  <h2>Upcoming Runs</h2>
+  <div id="scheduleGrid"></div>
+</div>
 <div class="container" id="routeView">
   <div class="back" onclick="showHome()">← Back</div>
 
   <h2 id="routeName"></h2>
   <p id="routeInfo"></p>
-  <p id="routeDescription" style="color:#c7cedb; line-height:1.6; max-width:800px;"></p>
-
+  <p
+    id="routeDescription"
+    style="
+    color:#000000;
+    line-height:1.6;
+    max-width:800px;
+    white-space:pre-line;
+  "
+></p>
   <div id="map"></div>
 
   <a id="stravaLink" class="btn" target="_blank">Open in Strava</a>
@@ -118,6 +217,12 @@
 
 <script>
 let routes = [];
+let scheduledRuns = [];
+let previousSection = 'schedule';
+let activeCategory = 'summer';  
+
+// Replace with your published Google Sheet JSON endpoint
+const GOOGLE_SHEET_URL = 'https://opensheet.elk.sh/1_1t3XtoAZ0vagZX1ePSvvAGu9o9S1O85YUoLMCFCkRs/Schedule';
 let map;
 let gpxLayer;
 
@@ -125,30 +230,168 @@ async function loadRoutes() {
   const res = await fetch('./routes.json');
   routes = await res.json();
   renderGrid();
+  loadSchedule();
+  showSection('routes');
 }
 
+async function loadSchedule() {
+  try {
+    const res = await fetch(GOOGLE_SHEET_URL);
+    const data = await res.json();
+
+    // Expected columns:
+    // date, time, runningGroup, routeId
+    scheduledRuns = data;
+    renderSchedule();
+  } catch (err) {
+    console.error('Schedule failed to load', err);
+  }
+}
+
+function renderSchedule() {
+  const grid = document.getElementById('scheduleGrid');
+  grid.innerHTML = '';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const upcoming = scheduledRuns
+    .filter(run => {
+      const runDate = new Date(run.date);
+      runDate.setHours(0, 0, 0, 0);
+      return runDate >= today;
+    })
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  upcoming.forEach(run => {
+    const route = routes.find(
+      r => String(r.id) === String(run.routeId)
+    );
+
+    const div = document.createElement('div');
+    div.className = 'card';
+
+    const formattedDate = new Date(run.date)
+      .toLocaleDateString('en-GB', {
+        weekday: 'short',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      })
+      .replace(',', '');
+
+    div.innerHTML = `
+      <div style="font-size:0.9rem; color:#000000; margin-bottom:8px;">
+        ${formattedDate} · ${run.time || ''}
+      </div>
+
+      
+
+      ${
+        route
+          ? `
+            <p style="margin:0 0 8px 0; font-weight:600; font-size:1.2rem;">
+              ${route.name}
+            </p>
+          `
+          : ''
+      }
+
+      <h3 class="route-title" style="min-height:auto; margin-bottom:6px; font-size:1rem;">
+        ${run.runningGroup || ''}
+      </h3>
+      
+      <p style="margin:0 0 14px 0; color:#555555;">
+        ${run.notes || ''}
+      </p>
+
+      ${
+        route
+          ? `
+            <button class="btn view-route-btn" style="margin-top:auto;">
+              View Route / Session Detail
+            </button>
+          `
+          : ''
+      }
+    `;
+
+    // Only attach button if route exists
+    if (route) {
+      div.querySelector('.view-route-btn')
+        .addEventListener('click', (e) => {
+          e.stopPropagation();
+          openScheduledRoute(run, route);
+        });
+    }
+
+    grid.appendChild(div);
+  });
+}
 function renderGrid() {
   const grid = document.getElementById('routesGrid');
   grid.innerHTML = '';
 
-  routes.forEach(r => {
+  const filteredRoutes = routes.filter(
+    r => (r.category || '').toLowerCase() === activeCategory
+  );
+
+  filteredRoutes.forEach(r => {
     const div = document.createElement('div');
     div.className = 'card';
+
+    const isDrill = r.category === 'drill';
+
     div.innerHTML = `
       <h3 class="route-title">${r.name}</h3>
-      <p>${r.distance} km</p>
-      <div class="map-thumb" id="thumb-${r.id}"></div>
+
+      <p>
+        ${
+          isDrill
+            ? (r.duration || '')
+            : `${r.distance} km`
+        }
+      </p>
+
+      ${
+        isDrill
+          ? `
+            <img
+              class="drill-thumb"
+              src="${r.image}"
+              alt="${r.name}"
+            />
+          `
+          : `
+            <div
+              class="map-thumb"
+              id="thumb-${r.id}"
+            ></div>
+          `
+      }
     `;
 
-    div.onclick = () => openRoute(r);
+    div.addEventListener('click', () => {
+      previousSection = 'routes';
+      openRoute(r);
+    });
+
     grid.appendChild(div);
 
-    setTimeout(() => initThumbMap(r), 100);
+    // only render maps for routes
+    if (!isDrill) {
+      requestAnimationFrame(() => {
+        const el = document.getElementById(`thumb-${r.id}`);
+
+        if (el) {
+          initThumbMap(r);
+        }
+      });
+    }
   });
 }
-
-function initThumbMap(route) {
-  const map = L.map(`thumb-${route.id}`, {
+  function initThumbMap(route, elementId = `thumb-${route.id}`) {
+  const map = L.map(elementId, {
     zoomControl: false,
     attributionControl: false,
     dragging: false,
@@ -165,40 +408,207 @@ function initThumbMap(route) {
   }).addTo(map);
 }
 
+function openScheduledRoute(run, route) {
+  previousSection = 'schedule';
+
+  openRoute(route);
+
+  const isDrill =
+    route.category === 'drill';
+
+  const sessionInfo = isDrill
+    ? route.duration || ''
+    : `${route.distance} km`;
+
+  document.getElementById(
+    'routeInfo'
+  ).innerText =
+    `${sessionInfo} · ${run.runningGroup || ''} · ${run.date} ${run.time || ''}`;
+}
+  
 function openRoute(route) {
+   // Always open detail page at top
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+  
   document.getElementById('homeView').style.display = 'none';
+  document.getElementById('scheduleView').style.display = 'none';
   document.getElementById('routeView').style.display = 'block';
 
-  document.getElementById('routeName').innerText = route.name;
-  document.getElementById('routeInfo').innerText = route.distance + ' km';
+  const isDrill = route.category === 'drill';
 
-  document.getElementById('routeDescription').innerText = route.description || '';
+  document.getElementById('routeName').innerText =
+    route.name;
 
-  document.getElementById('stravaLink').href = route.strava;
-  document.getElementById('gpxDownload').href = route.gpx;
+  document.getElementById('routeDescription').innerText =
+    route.description || '';
+
+  if (isDrill) {
+    document.getElementById('routeInfo').innerText =
+      route.duration || '';
+
+     // remove fixed map height
+    document.getElementById('map').style.height = 'auto';
+
+    // replace map with image
+    document.getElementById('map').innerHTML = `
+      <img
+        src="${route.image}"
+        alt="${route.name}"
+        style="
+          width:100%;
+          border-radius:12px;
+          max-height:500px;
+          object-fit:cover;
+        "
+      />`;
+
+    // hide buttons
+    document.getElementById('stravaLink').style.display =
+      'none';
+
+    document.getElementById('gpxDownload').style.display =
+      'none';
+
+    return;
+  }
+
+  // normal route behaviour
+  document.getElementById('routeInfo').innerText =
+    `${route.distance} km`;
+
+  // restore map height
+  document.getElementById('map').style.height = '60vh';
+
+  document.getElementById('map').style.display = 'block';
+
+  document.getElementById('stravaLink').style.display =
+    'inline-block';
+
+  document.getElementById('gpxDownload').style.display =
+    'inline-block';
+
+  document.getElementById('stravaLink').href =
+    route.strava || '#';
+
+  document.getElementById('gpxDownload').href =
+    route.gpx || '';
 
   setTimeout(() => {
     if (map) map.remove();
 
+    document.getElementById('map').innerHTML = '';
+
     map = L.map('map').setView([53.6, -2.1], 13);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    L.tileLayer(
+      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+    ).addTo(map);
 
-    gpxLayer = new L.GPX(route.gpx, {
-      async: true,
-      polyline_options: { color: 'purple' }
-    }).on('loaded', function(e) {
-      map.fitBounds(e.target.getBounds());
-    }).addTo(map);
+    if (route.gpx) {
+      gpxLayer = new L.GPX(route.gpx, {
+        async: true,
+        polyline_options: {
+          color: 'purple'
+        }
+      })
+      .on('loaded', function(e) {
+        map.fitBounds(
+          e.target.getBounds()
+        );
+      })
+      .addTo(map);
+    }
   }, 100);
+}
+  function showSection(section) {
+  previousSection = section;
+
+  document.getElementById('homeView').style.display =
+    section === 'routes' ? 'block' : 'none';
+
+  document.getElementById('scheduleView').style.display =
+    section === 'schedule' ? 'block' : 'none';
+
+  document.getElementById('routeView').style.display =
+    'none';
+
+  // When Routes tab opens,
+  // show category buttons first
+  if (section === 'routes') {
+    showRouteCategories();
+  }
 }
 
 function showHome() {
-  document.getElementById('routeView').style.display = 'none';
-  document.getElementById('homeView').style.display = 'block';
+  document.getElementById(
+    'routeView'
+  ).style.display = 'none';
+
+  // Came from Upcoming Runs
+  if (previousSection === 'schedule') {
+    document.getElementById(
+      'scheduleView'
+    ).style.display = 'block';
+
+    document.getElementById(
+      'homeView'
+    ).style.display = 'none';
+
+    return;
+  }
+
+  // Came from route catalogue
+  document.getElementById(
+    'homeView'
+  ).style.display = 'block';
+
+  document.getElementById(
+    'scheduleView'
+  ).style.display = 'none';
+
+  // Show catalogue, not categories
+  document.getElementById(
+    'routeCategories'
+  ).style.display = 'none';
+
+  document.getElementById(
+    'routesCatalogue'
+  ).style.display = 'block';
+}
+function setCategoryFilter(category) {
+  activeCategory = category;
+  renderGrid();
+}
+
+function openCategory(category) {
+  activeCategory = category;
+
+  document.getElementById(
+    'routeCategories'
+  ).style.display = 'none';
+
+  document.getElementById(
+    'routesCatalogue'
+  ).style.display = 'block';
+
+  renderGrid();
+}
+
+function showRouteCategories() {
+  document.getElementById(
+    'routeCategories'
+  ).style.display = 'grid';
+
+  document.getElementById(
+    'routesCatalogue'
+  ).style.display = 'none';
 }
 
 loadRoutes();
+
 </script>
 
 </body>
