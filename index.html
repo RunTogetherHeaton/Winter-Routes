@@ -21,14 +21,21 @@
     }
 
     header {
-     padding: 16px;
-      font-size: 20px;
-      font-weight: bold;
-      background: #22d434;
-      color: white;
-      position: sticky;
-      top: 0;
+     padding: 12px 16px;
+     background: #22d434; 
+     position: sticky;
+     top: 0;
+     display: flex;
+     justify-content: center;
+     align-items: center;
+     z-index: 1000;
     }
+    
+  .header-logo {
+    height: 60px;
+    width: auto;
+    display: block;
+  }
     
     .container {
       padding: 16px;
@@ -143,7 +150,13 @@
   </style>
 </head>
 <body>
-<header>🏃 RunTogether Heaton Park</header>
+<header>
+  <img
+    src="./images/runtogether-header.png"
+    alt="RunTogether Heaton Park"
+    class="header-logo"
+  />
+</header>
   
 <div style="padding:12px 16px; display:flex; gap:10px; background:#1b7027; border-top:1px solid #b8e6bd;">
   <button class="btn" onclick="showSection('routes')">Sessions</button>
