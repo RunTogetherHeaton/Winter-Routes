@@ -244,17 +244,12 @@ async function loadRoutes() {
   routes = await res.json();
   renderGrid();
   loadSchedule();
-
-  // Refresh the schedule every five minutes so expired sessions disappear
-  // even if someone leaves the page open.
-  setInterval(loadSchedule, 5 * 60 * 1000);
-
   showSection('routes');
 }
 
 async function loadSchedule() {
   try {
-    const res = await fetch(GOOGLE_SHEET_URL + '?_=' + Date.now());
+    const res = await fetch(GOOGLE_SHEET_URL);
     const data = await res.json();
 
     // Expected columns:
@@ -266,174 +261,44 @@ async function loadSchedule() {
   }
 }
 
-
-// Convert the Google Sheet date into a local JavaScript Date.
-function parseScheduleDate(dateValue) {
-  if (!dateValue) return null;
-
-  const value = String(dateValue).trim();
-
-  // Google Sheets date format: YYYY-MM-DD
-  const isoMatch = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  if (isoMatch) {
-    return new Date(
-      Number(isoMatch[1]),
-      Number(isoMatch[2]) - 1,
-      Number(isoMatch[3])
-    );
-  }
-
-  // Also accept DD/MM/YYYY if the sheet format changes.
-  const ukMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (ukMatch) {
-    return new Date(
-      Number(ukMatch[3]),
-      Number(ukMatch[2]) - 1,
-      Number(ukMatch[1])
-    );
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-// Convert common Google Sheets time formats into hours and minutes.
-function parseScheduleTime(timeValue) {
-  if (timeValue === null || timeValue === undefined || timeValue === '') {
-    return null;
-  }
-
-  // Google Sheets can return a time as a fraction of a day.
-  if (typeof timeValue === 'number' && timeValue >= 0 && timeValue < 1) {
-    const totalMinutes = Math.round(timeValue * 24 * 60);
-    return {
-      hours: Math.floor(totalMinutes / 60) % 24,
-      minutes: totalMinutes % 60
-    };
-  }
-
-  const value = String(timeValue).trim();
-
-  // Supports 18:00, 18:00:00, 6:00 PM and 6 PM.
-  const match = value.match(/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*(AM|PM)?$/i);
-  if (!match) return null;
-
-  let hours = Number(match[1]);
-  const minutes = Number(match[2] || 0);
-  const meridiem = (match[3] || '').toUpperCase();
-
-  if (minutes > 59 || hours > 24 || (hours === 24 && minutes !== 0)) {
-    return null;
-  }
-
-  if (meridiem) {
-    if (hours < 1 || hours > 12) return null;
-    if (meridiem === 'AM' && hours === 12) hours = 0;
-    if (meridiem === 'PM' && hours !== 12) hours += 12;
-  }
-
-  return { hours, minutes };
-}
-
-function getRunRemovalTime(run) {
-  const runDate = parseScheduleDate(run.date);
-  const runTime = parseScheduleTime(run.time);
-
-  // If a date or time cannot be understood, keep the run visible
-  // rather than accidentally hiding the entire schedule.
-  if (!runDate || !runTime) return null;
-
-  runDate.setHours(runTime.hours, runTime.minutes, 0, 0);
-
-  // Duration is in minutes. Use 60 minutes if the cell is blank.
-  const durationValue = Number(run.duration);
-  const durationMinutes =
-    Number.isFinite(durationValue) && durationValue > 0
-      ? durationValue
-      : 60;
-
-  // Remove the run two hours after its scheduled finish.
-  return new Date(
-    runDate.getTime() + (durationMinutes + 120) * 60 * 1000
-  );
-}
-
 function renderSchedule() {
   const grid = document.getElementById('scheduleGrid');
   grid.innerHTML = '';
 
-  const now = new Date();
-
-  const today = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate()
-  );
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   const upcoming = scheduledRuns
     .filter(run => {
-      const runDate = parseScheduleDate(run.date);
-
-      // Ignore rows with no usable date.
-      if (!runDate || Number.isNaN(runDate.getTime())) {
-        return false;
-      }
-
-      const runTime = parseScheduleTime(run.time);
-
-      // If the time is missing or unrecognised, only show today's
-      // or future-dated sessions. This prevents old rows lingering.
-      if (!runTime) {
-        return runDate >= today;
-      }
-
-      const removalTime = getRunRemovalTime(run);
-
-      // Keep future sessions, plus today's/recent sessions until
-      // two hours after their scheduled finish.
-      return removalTime && now < removalTime;
+      const runDate = new Date(run.date);
+      runDate.setHours(0, 0, 0, 0);
+      return runDate >= today;
     })
-    .sort((a, b) => {
-      const dateA = parseScheduleDate(a.date);
-      const dateB = parseScheduleDate(b.date);
-
-      if (!dateA && !dateB) return 0;
-      if (!dateA) return 1;
-      if (!dateB) return -1;
-
-      const timeA = parseScheduleTime(a.time);
-      const timeB = parseScheduleTime(b.time);
-
-      if (timeA) dateA.setHours(timeA.hours, timeA.minutes, 0, 0);
-      if (timeB) dateB.setHours(timeB.hours, timeB.minutes, 0, 0);
-
-      return dateA - dateB;
-    });
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
 
   upcoming.forEach(run => {
-    // Accept either routeId or routeID as the Google Sheet column name.
-    const routeId = run.routeId || run.routeID;
     const route = routes.find(
-      r => String(r.id) === String(routeId)
+      r => String(r.id) === String(run.routeId)
     );
 
     const div = document.createElement('div');
     div.className = 'card';
 
-    const runDate = parseScheduleDate(run.date);
-    const formattedDate = runDate
-      ? runDate.toLocaleDateString('en-GB', {
-          weekday: 'short',
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        }).replace(',', '')
-      : run.date || '';
+    const formattedDate = new Date(run.date)
+      .toLocaleDateString('en-GB', {
+        weekday: 'short',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      })
+      .replace(',', '');
 
     div.innerHTML = `
       <div style="font-size:0.9rem; color:#000000; margin-bottom:8px;">
         ${formattedDate} · ${run.time || ''}
       </div>
+
+      
 
       ${
         route
@@ -448,7 +313,7 @@ function renderSchedule() {
       <h3 class="route-title" style="min-height:auto; margin-bottom:6px; font-size:1rem;">
         ${run.runningGroup || ''}
       </h3>
-
+      
       <p style="margin:0 0 14px 0; color:#555555;">
         ${run.notes || ''}
       </p>
@@ -464,6 +329,7 @@ function renderSchedule() {
       }
     `;
 
+    // Only attach button if route exists
     if (route) {
       div.querySelector('.view-route-btn')
         .addEventListener('click', (e) => {
@@ -475,7 +341,6 @@ function renderSchedule() {
     grid.appendChild(div);
   });
 }
-
 function renderGrid() {
   const grid = document.getElementById('routesGrid');
   grid.innerHTML = '';
