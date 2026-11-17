@@ -254,7 +254,7 @@ async function loadRoutes() {
 
 async function loadSchedule() {
   try {
-    const res = await fetch(GOOGLE_SHEET_URL);
+    const res = await fetch(GOOGLE_SHEET_URL + '?_=' + Date.now());
     const data = await res.json();
 
     // Expected columns:
@@ -364,12 +364,34 @@ function renderSchedule() {
 
   const now = new Date();
 
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+
   const upcoming = scheduledRuns
     .filter(run => {
+      const runDate = parseScheduleDate(run.date);
+
+      // Ignore rows with no usable date.
+      if (!runDate || Number.isNaN(runDate.getTime())) {
+        return false;
+      }
+
+      const runTime = parseScheduleTime(run.time);
+
+      // If the time is missing or unrecognised, only show today's
+      // or future-dated sessions. This prevents old rows lingering.
+      if (!runTime) {
+        return runDate >= today;
+      }
+
       const removalTime = getRunRemovalTime(run);
 
-      // Keep rows with an unrecognised date/time visible as a safeguard.
-      return !removalTime || now < removalTime;
+      // Keep future sessions, plus today's/recent sessions until
+      // two hours after their scheduled finish.
+      return removalTime && now < removalTime;
     })
     .sort((a, b) => {
       const dateA = parseScheduleDate(a.date);
