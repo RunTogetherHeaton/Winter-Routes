@@ -261,21 +261,51 @@ async function loadSchedule() {
   }
 }
 
+
 function renderSchedule() {
   const grid = document.getElementById('scheduleGrid');
   grid.innerHTML = '';
 
-const today = new Date();
-today.setHours(0, 0, 0, 0);
+  const now = new Date();
 
-const upcoming = scheduledRuns
-  .filter(run => {
-    const runDate = new Date(run.date);
-    runDate.setHours(0, 0, 0, 0);
-    return runDate >= today;
-  })
-  .sort((a, b) => new Date(a.date) - new Date(b.date));  
-  
+  const upcoming = scheduledRuns
+    .filter(run => {
+      // Read the session date
+      const dateParts = run.date.split('/');
+      const runDate = new Date(
+        dateParts[2],
+        dateParts[1] - 1,
+        dateParts[0]
+      );
+
+      // Read the session start time
+      const timeParts = (run.time || '00:00').split(':');
+      runDate.setHours(
+        Number(timeParts[0]),
+        Number(timeParts[1]),
+        0,
+        0
+      );
+
+      // Calculate session finish time
+      const duration = Number(run.duration) || 60;
+      const finishTime = new Date(
+        runDate.getTime() + duration * 60000
+      );
+
+      // Keep session visible until 2 hours after finishing
+      const removeTime = new Date(
+        finishTime.getTime() + 2 * 60 * 60000
+      );
+
+      return now < removeTime;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.date.split('/').reverse().join('-'));
+      const dateB = new Date(b.date.split('/').reverse().join('-'));
+      return dateA - dateB;
+    });
+
   upcoming.forEach(run => {
     const route = routes.find(
       r => String(r.id) === String(run.routeId)
@@ -284,21 +314,19 @@ const upcoming = scheduledRuns
     const div = document.createElement('div');
     div.className = 'card';
 
-    const formattedDate = new Date(run.date)
-      .toLocaleDateString('en-GB', {
-        weekday: 'short',
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      })
-      .replace(',', '');
+    const formattedDate = new Date(
+      run.date.split('/').reverse().join('-')
+    ).toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).replace(',', '');
 
     div.innerHTML = `
       <div style="font-size:0.9rem; color:#000000; margin-bottom:8px;">
         ${formattedDate} · ${run.time || ''}
       </div>
-
-      
 
       ${
         route
@@ -313,7 +341,7 @@ const upcoming = scheduledRuns
       <h3 class="route-title" style="min-height:auto; margin-bottom:6px; font-size:1rem;">
         ${run.runningGroup || ''}
       </h3>
-      
+
       <p style="margin:0 0 14px 0; color:#555555;">
         ${run.notes || ''}
       </p>
@@ -329,7 +357,6 @@ const upcoming = scheduledRuns
       }
     `;
 
-    // Only attach button if route exists
     if (route) {
       div.querySelector('.view-route-btn')
         .addEventListener('click', (e) => {
