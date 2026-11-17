@@ -271,12 +271,8 @@ function renderSchedule() {
   const upcoming = scheduledRuns
     .filter(run => {
       // Read the session date
-      const dateParts = run.date.split('/');
-      const runDate = new Date(
-        dateParts[2],
-        dateParts[1] - 1,
-        dateParts[0]
-      );
+      // Read date in YYYY-MM-DD format
+  const runDate = new Date(run.date + 'T00:00:00');
 
       // Read the session start time
       const timeParts = (run.time || '00:00').split(':');
@@ -301,8 +297,8 @@ function renderSchedule() {
       return now < removeTime;
     })
     .sort((a, b) => {
-      const dateA = new Date(a.date.split('/').reverse().join('-'));
-      const dateB = new Date(b.date.split('/').reverse().join('-'));
+      const dateA = new Date(a.date + 'T00:00:00');
+      const dateB = new Date(b.date + 'T00:00:00');      
       return dateA - dateB;
     });
 
@@ -315,7 +311,7 @@ function renderSchedule() {
     div.className = 'card';
 
     const formattedDate = new Date(
-      run.date.split('/').reverse().join('-')
+      run.date + 'T00:00:00'
     ).toLocaleDateString('en-GB', {
       weekday: 'short',
       day: '2-digit',
